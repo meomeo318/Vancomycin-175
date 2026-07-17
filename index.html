@@ -1,321 +1,427 @@
-<!DOCTYPE html>
-<html lang="vi">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Vancomycin Calculator - BVQY175</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
-    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    <style>
-        body { font-family: 'Inter', sans-serif; background-color: #f3f4f6; }
-        .card { background: white; border-radius: 0.5rem; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); padding: 1.5rem; margin-bottom: 1.5rem; }
-        .input-field { width: 100%; padding: 0.5rem; border: 1px solid #d1d5db; border-radius: 0.375rem; outline: none; transition: border-color 0.2s; }
-        .input-field:focus { border-color: #3b82f6; box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2); }
-    </style>
-</head>
-<body>
-    <div id="root"></div>
+import React, { useState } from 'react';
+import { Calculator, Activity, Syringe, AlertCircle, Info } from 'lucide-react';
 
-    <script type="text/babel">
-        const { useState, useEffect } = React;
+// Tính Creatinine Clearance (Cockcroft-Gault)
+const calculateCrCl = (age, weight, scr, isFemale) => {
+  if (!age || !weight || !scr) return 0;
+  let crcl = ((140 - age) * weight) / (72 * scr);
+  if (isFemale) crcl *= 0.85;
+  return crcl.toFixed(1);
+};
 
-        // BẢNG DỮ LIỆU TỪ PROTOCOL
-        const calcIntermittentLD = (weight) => {
-            if (!weight || weight < 36) return null;
-            if (weight <= 45) return { dose: 1000, adj: 750, vol: 250, time: "90 phút" };
-            if (weight <= 55) return { dose: 1250, adj: 1000, vol: 250, time: "2 giờ" };
-            if (weight <= 65) return { dose: 1500, adj: 1250, vol: 250, time: "2 giờ" };
-            if (weight <= 75) return { dose: 1750, adj: 1500, vol: 500, time: "3 giờ" };
-            if (weight <= 120) return { dose: 2000, adj: 1750, vol: 500, time: "4 giờ" };
-            return { dose: 3000, adj: 2000, vol: 500, time: "4 giờ" };
-        };
+// Tính BMI
+const calculateBMI = (weight, height) => {
+  if (!weight || !height) return 0;
+  return (weight / ((height / 100) ** 2)).toFixed(1);
+};
 
-        const calcIntermittentMD = (crcl, weight) => {
-            if (!crcl || !weight) return null;
-            if (crcl > 130) return { warning: "Bệnh nhân ARC: Chuyển chỉ định Vancomycin đường truyền liên tục." };
-            if (crcl >= 90) return { dose: "15 mg/kg", interval: "q8h - q12h", max: "30-45 mg/kg, tối đa 3g", tdm: "Cđáy: 30 phút trước liều 4" };
-            if (crcl >= 51) return { dose: "10-20 mg/kg", interval: "q12h", max: "20-40 mg/kg, tối đa 3g", tdm: "Cđáy: 30 phút trước liều 4" };
-            if (crcl >= 30) return { dose: "10-15 mg/kg q12h đến 20 mg/kg q24h", interval: "q12h - q24h", max: "20-30 mg/kg, tối đa 3g", tdm: "Cđáy: 30 phút trước liều 4" };
-            if (crcl >= 10) return { dose: "10-15 mg/kg q24h đến 15 mg/kg q48h", interval: "q24h - q48h", max: "7.5-15 mg/kg, tối đa 3g", tdm: "q24h: Trước liều 4 / q48h: Trước liều 3" };
-            return { dose: "500mg - 750mg", interval: "q48h", max: "Tùy tình trạng", tdm: "Cđáy: 30 phút trước liều 3" };
-        };
+// Lấy liều nạp truyền ngắt quãng (II) theo protocol trang 8
+const getIILoadingDose = (weight, crrt) => {
+  if (crrt) return { dose: "20-25 mg/kg (Tối đa 2000mg)", vol: "500 mL", time: "4 giờ" };
+  if (!weight) return { dose: "---", vol: "-", time: "-" };
+  if (weight < 36) return { dose: "Chưa có dl chuẩn", vol: "-", time: "-" };
+  if (weight <= 45) return { dose: "750 mg", vol: "250 mL", time: "90 phút" };
+  if (weight <= 55) return { dose: "1000 mg", vol: "250 mL", time: "2 giờ" };
+  if (weight <= 65) return { dose: "1250 mg", vol: "250 mL", time: "2 giờ" };
+  if (weight <= 75) return { dose: "1500 mg", vol: "500 mL", time: "3 giờ" };
+  if (weight <= 120) return { dose: "1750 mg", vol: "500 mL", time: "4 giờ" };
+  return { dose: "2000 mg", vol: "500 mL", time: "4 giờ" };
+};
 
-        const calcContinuousLD = (weight, crcl) => {
-            if (!weight) return null;
-            if (weight < 40) return { dose: 750, vol: 250, time: "90 phút" };
-            if (weight <= 44) return { dose: 1000, vol: 250, time: "2 giờ" };
-            if (weight <= 54) return { dose: 1250, vol: 250, time: "2 giờ" };
-            if (weight <= 64) return { dose: 1500, vol: 500, time: "3 giờ" };
-            if (weight <= 79) return { dose: 2000, vol: 500, time: "4 giờ" };
-            if (weight <= 119) return { dose: 2500, vol: 750, time: "4 giờ" };
-            if (crcl && crcl < 60) return { dose: 2500, vol: 750, time: "4 giờ" };
-            return { dose: 3000, vol: 750, time: "4 giờ" };
-        };
+// Lấy liều nạp truyền liên tục (CI) theo protocol trang 10
+const getCILoadingDose = (weight, crcl) => {
+  if (!weight) return { dose: "---", vol: "-", time: "-" };
+  if (weight < 40) return { dose: "750 mg", vol: "250 mL", time: "90 phút" };
+  if (weight <= 44) return { dose: "1000 mg", vol: "250 mL", time: "2 giờ" };
+  if (weight <= 54) return { dose: "1250 mg", vol: "250 mL", time: "2 giờ" };
+  if (weight <= 64) return { dose: "1500 mg", vol: "500 mL", time: "3 giờ" };
+  if (weight <= 79) return { dose: "2000 mg", vol: "500 mL", time: "4 giờ" };
+  if (weight <= 119) return { dose: "2500 mg", vol: "750 mL", time: "4 giờ" };
+  if (crcl < 60) return { dose: "2500 mg", vol: "750 mL", time: "4 giờ" };
+  return { dose: "3000 mg (Tối đa)", vol: "750 mL", time: "4 giờ" };
+};
 
-        const calcContinuousMDRate = (crcl, weight) => {
-            if (!crcl || !weight) return null;
-            let col = 1; // 36-55
-            if (weight >= 56 && weight <= 119) col = 2;
-            if (weight >= 120) col = 3;
+// Lấy tốc độ truyền duy trì liên tục (CI) theo protocol trang 11 (Dung dịch 4mg/mL)
+const getCIMaintenanceRate = (crcl) => {
+  if (!crcl) return 0;
+  if (crcl < 10) return 3;
+  if (crcl <= 15) return 4;
+  if (crcl <= 20) return 5;
+  if (crcl <= 30) return 8;
+  if (crcl <= 40) return 10;
+  if (crcl <= 50) return 12;
+  if (crcl <= 62) return 15;
+  if (crcl <= 83) return 20;
+  if (crcl <= 99) return 23;
+  return 30; // >=100
+};
 
-            if (crcl < 10) return col === 3 ? 4 : 3;
-            if (crcl <= 15) return col === 1 ? 4 : (col === 2 ? 5 : 6);
-            if (crcl <= 20) return col === 1 ? 5 : (col === 2 ? 6 : 7);
-            if (crcl <= 30) return col === 3 ? 9 : 8;
-            if (crcl <= 40) return col === 3 ? 11 : 10;
-            if (crcl <= 50) return col === 1 ? 12 : (col === 2 ? 12 : 13);
-            if (crcl <= 62) return 15;
-            if (crcl <= 83) return 20;
-            if (crcl <= 99) return 23;
-            return 30; // >100
-        };
+// Tính toán Sawchuk-Zaske (Mô hình 1 ngăn mở)
+const calculateSZ = (dose, tau, tInf, cPeak, cTrough, t1, t2) => {
+    if(!dose || !tau || !tInf || !cPeak || !cTrough) return null;
+    
+    // t1: time from end of infusion to peak draw
+    // t2: time from trough draw to next dose
+    const deltaT = tau - tInf - t1 - t2; 
+    
+    if (deltaT <= 0 || cPeak <= cTrough) return { error: "Dữ liệu thời gian/nồng độ không hợp lệ" };
 
-        // COMPONENT TDM Truyền ngắt quãng
-        const IntermittentTDM = () => {
-            const [currentDose, setCurrentDose] = useState("");
-            const [calcAUC, setCalcAUC] = useState("");
-            const [targetAUC, setTargetAUC] = useState(400);
+    // 1. Elimination Rate Constant (Ke)
+    const ke = Math.log(cPeak / cTrough) / deltaT;
+    
+    // 2. True Peak & True Trough
+    const truePeak = cPeak * Math.exp(ke * t1);
+    const trueTrough = cTrough * Math.exp(-ke * t2);
 
-            const newDose = (currentDose && calcAUC && calcAUC > 0) 
-                ? ((parseFloat(currentDose) * parseFloat(targetAUC)) / parseFloat(calcAUC)).toFixed(0) 
-                : null;
+    // 3. Volume of Distribution (Vd)
+    const vd = (dose * (1 - Math.exp(-ke * tInf))) / (tInf * ke * (truePeak - trueTrough * Math.exp(-ke * tInf)));
 
-            return (
-                <div className="bg-blue-50 p-4 rounded-lg mt-4 border border-blue-200">
-                    <h3 className="font-bold text-blue-800 mb-2">TDM: Hiệu chỉnh liều theo AUC</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-                        <div>
-                            <label className="block text-sm text-gray-600">Liều hiện tại (mg)</label>
-                            <input type="number" className="input-field" value={currentDose} onChange={e => setCurrentDose(e.target.value)} placeholder="Vd: 1000" />
-                        </div>
-                        <div>
-                            <label className="block text-sm text-gray-600">AUC ước tính (mg.h/L)</label>
-                            <input type="number" className="input-field" value={calcAUC} onChange={e => setCalcAUC(e.target.value)} placeholder="Vd: 350" />
-                        </div>
-                        <div>
-                            <label className="block text-sm text-gray-600">AUC mục tiêu</label>
-                            <select className="input-field" value={targetAUC} onChange={e => setTargetAUC(e.target.value)}>
-                                <option value="400">400 mg.h/L (Tối thiểu)</option>
-                                <option value="500">500 mg.h/L (Trung bình)</option>
-                                <option value="600">600 mg.h/L (Tối đa)</option>
-                            </select>
-                        </div>
-                    </div>
-                    {newDose && (
-                        <div className="p-3 bg-green-100 text-green-800 rounded border border-green-300">
-                            <strong>Liều mới gợi ý:</strong> {newDose} mg <br/>
-                            <span className="text-sm">(Công thức: Liều mới = Liều cũ × AUC đích / AUC ước tính)</span>
-                        </div>
-                    )}
+    // 4. Clearance (CL)
+    const cl = ke * vd;
+
+    // 5. Daily AUC
+    const dailyDose = dose * (24 / tau);
+    const auc24 = dailyDose / cl;
+
+    return {
+        ke: ke.toFixed(4),
+        halfLife: (0.693 / ke).toFixed(1),
+        truePeak: truePeak.toFixed(1),
+        trueTrough: trueTrough.toFixed(1),
+        vd: vd.toFixed(1),
+        cl: cl.toFixed(2),
+        auc24: auc24.toFixed(0)
+    };
+};
+
+export default function App() {
+  const [activeTab, setActiveTab] = useState('empiric');
+  
+  // Patient Info State
+  const [age, setAge] = useState('');
+  const [weight, setWeight] = useState('');
+  const [height, setHeight] = useState('');
+  const [scr, setScr] = useState('');
+  const [isFemale, setIsFemale] = useState(false);
+  const [crrt, setCrrt] = useState(false);
+
+  // Computed Patient Values
+  const crcl = calculateCrCl(Number(age), Number(weight), Number(scr), isFemale);
+  const bmi = calculateBMI(Number(weight), Number(height));
+  
+  // Protocol Results
+  const iiLoad = getIILoadingDose(Number(weight), crrt);
+  const ciLoad = getCILoadingDose(Number(weight), Number(crcl));
+  const ciMaintRate = getCIMaintenanceRate(Number(crcl));
+  const ciMaintDose24 = ciMaintRate * 4 * 24; // rate (ml/h) * 4mg/ml * 24h
+
+  // Sawchuk Zaske State
+  const [szDose, setSzDose] = useState('');
+  const [szTau, setSzTau] = useState('12');
+  const [szTInf, setSzTInf] = useState('1');
+  const [szCPeak, setSzCPeak] = useState('');
+  const [szCTrough, setSzCTrough] = useState('');
+  const [szT1, setSzT1] = useState('1'); // Time from end inf to peak
+  const [szT2, setSzT2] = useState('0.5'); // Time from trough to next dose
+  const [targetAUC, setTargetAUC] = useState('500');
+
+  const szResult = calculateSZ(
+      Number(szDose), Number(szTau), Number(szTInf), 
+      Number(szCPeak), Number(szCTrough), Number(szT1), Number(szT2)
+  );
+
+  return (
+    <div className="min-h-screen bg-slate-50 font-sans text-slate-800 p-4 md:p-8">
+      <div className="max-w-5xl mx-auto space-y-6">
+        
+        {/* Header */}
+        <div className="bg-blue-800 text-white p-6 rounded-2xl shadow-lg flex flex-col md:flex-row items-center justify-between">
+          <div className="flex items-center space-x-4 mb-4 md:mb-0">
+            <div className="bg-white p-3 rounded-full text-blue-800">
+              <Calculator size={32} />
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold">Vancomycin Calculator</h1>
+              <p className="text-blue-200">Theo phác đồ Bệnh viện Quân y 175 (Khoa A4)</p>
+            </div>
+          </div>
+          <div className="text-right text-sm text-blue-200 flex flex-col items-end">
+            <span className="flex items-center"><Activity size={16} className="mr-1" /> TDM & PK/PD Ready</span>
+            <span className="opacity-75 mt-1">Hỗ trợ tra cứu lâm sàng</span>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          
+          {/* Patient Info Panel */}
+          <div className="lg:col-span-1 bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+            <h2 className="text-lg font-bold mb-4 flex items-center border-b pb-2">
+              Thông tin bệnh nhân
+            </h2>
+            <div className="space-y-4">
+              <div className="flex bg-slate-100 rounded-lg p-1">
+                <button 
+                  onClick={() => setIsFemale(false)}
+                  className={`flex-1 py-2 rounded-md text-sm font-medium transition-colors ${!isFemale ? 'bg-white shadow text-blue-600' : 'text-slate-500'}`}
+                >Nam</button>
+                <button 
+                  onClick={() => setIsFemale(true)}
+                  className={`flex-1 py-2 rounded-md text-sm font-medium transition-colors ${isFemale ? 'bg-white shadow text-pink-600' : 'text-slate-500'}`}
+                >Nữ</button>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-500 uppercase">Tuổi (năm)</label>
+                  <input type="number" value={age} onChange={(e)=>setAge(e.target.value)} className="w-full mt-1 p-2 border rounded bg-slate-50 focus:ring-2 focus:ring-blue-500 outline-none" />
                 </div>
-            );
-        };
-
-        // COMPONENT TDM Truyền liên tục
-        const ContinuousTDM = ({ weight }) => {
-            const [currentRate, setCurrentRate] = useState("");
-            const [currentLevel, setCurrentLevel] = useState("");
-            const targetLevel = 22.5; // Trung bình của 20-25
-
-            let recommendation = null;
-
-            if (currentRate && currentLevel) {
-                const rate = parseFloat(currentRate);
-                const level = parseFloat(currentLevel);
-                const newRate = ((rate * targetLevel) / level).toFixed(1);
-                
-                if (level >= 0 && level <= 5) {
-                    recommendation = { bolus: (15 * (weight || 60)).toFixed(0), newRate, action: "Tăng tốc độ truyền" };
-                } else if (level >= 6 && level <= 10) {
-                    recommendation = { bolus: (10 * (weight || 60)).toFixed(0), newRate, action: "Tăng tốc độ truyền" };
-                } else if (level >= 11 && level <= 15) {
-                    recommendation = { bolus: (7 * (weight || 60)).toFixed(0), newRate, action: "Tăng tốc độ truyền" };
-                } else if (level >= 16 && level <= 19) {
-                    recommendation = { bolus: 0, newRate, action: "Tăng tốc độ truyền" };
-                } else if (level >= 20 && level <= 25) {
-                    recommendation = { bolus: 0, newRate: rate, action: "Đạt đích. Giữ nguyên tốc độ." };
-                } else if (level >= 26 && level <= 35) {
-                    recommendation = { bolus: 0, newRate, action: "Giảm tốc độ truyền" };
-                } else if (level > 35) {
-                    recommendation = { bolus: 0, newRate, action: "Dừng truyền 6 giờ, sau đó truyền lại với tốc độ mới" };
-                }
-            }
-
-            return (
-                <div className="bg-purple-50 p-4 rounded-lg mt-4 border border-purple-200">
-                    <h3 className="font-bold text-purple-800 mb-2">TDM: Hiệu chỉnh tốc độ theo nồng độ đích (20-25 mg/L)</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                        <div>
-                            <label className="block text-sm text-gray-600">Tốc độ hiện tại (mL/h)</label>
-                            <input type="number" className="input-field" value={currentRate} onChange={e => setCurrentRate(e.target.value)} placeholder="Vd: 20" />
-                        </div>
-                        <div>
-                            <label className="block text-sm text-gray-600">Nồng độ đo được (mg/L)</label>
-                            <input type="number" className="input-field" value={currentLevel} onChange={e => setCurrentLevel(e.target.value)} placeholder="Vd: 12" />
-                        </div>
-                    </div>
-                    {recommendation && (
-                        <div className={`p-3 rounded border ${recommendation.action.includes('Đạt đích') ? 'bg-green-100 border-green-300 text-green-800' : 'bg-yellow-100 border-yellow-300 text-yellow-800'}`}>
-                            <p><strong>Hướng xử trí:</strong> {recommendation.action}</p>
-                            {recommendation.bolus > 0 && <p><strong>Liều nạp bổ sung:</strong> {recommendation.bolus} mg (làm tròn đến 250mg gần nhất)</p>}
-                            {recommendation.action !== "Đạt đích. Giữ nguyên tốc độ." && (
-                                <p><strong>Tốc độ truyền mới:</strong> {recommendation.newRate} mL/h <span className="text-sm">(tính trên mục tiêu 22.5 mg/L)</span></p>
-                            )}
-                            <p className="text-xs mt-2 italic text-gray-600">*Tổng liều duy trì không nên vượt quá 4g/ngày (tương đương 41 mL/h đối với nồng độ 4mg/mL).</p>
-                        </div>
-                    )}
+                <div>
+                  <label className="block text-xs font-semibold text-slate-500 uppercase">Cân nặng (kg)</label>
+                  <input type="number" value={weight} onChange={(e)=>setWeight(e.target.value)} className="w-full mt-1 p-2 border rounded bg-slate-50 focus:ring-2 focus:ring-blue-500 outline-none" />
                 </div>
-            );
-        };
+                <div>
+                  <label className="block text-xs font-semibold text-slate-500 uppercase">Chiều cao (cm)</label>
+                  <input type="number" value={height} onChange={(e)=>setHeight(e.target.value)} className="w-full mt-1 p-2 border rounded bg-slate-50 focus:ring-2 focus:ring-blue-500 outline-none" />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-500 uppercase">Scr (mg/dL)</label>
+                  <input type="number" step="0.1" value={scr} onChange={(e)=>setScr(e.target.value)} className="w-full mt-1 p-2 border rounded bg-slate-50 focus:ring-2 focus:ring-blue-500 outline-none" />
+                </div>
+              </div>
 
-        // COMPONENT CHÍNH
-        const App = () => {
-            const [weight, setWeight] = useState(60);
-            const [crcl, setCrcl] = useState(80);
-            const [tab, setTab] = useState('intermittent');
+              <label className="flex items-center space-x-2 bg-slate-50 p-3 rounded border border-slate-200 cursor-pointer hover:bg-slate-100 transition-colors">
+                <input type="checkbox" checked={crrt} onChange={(e)=>setCrrt(e.target.checked)} className="rounded text-blue-600 w-4 h-4" />
+                <span className="text-sm font-medium">Bệnh nhân đang lọc máu (CRRT)</span>
+              </label>
 
-            const intLD = calcIntermittentLD(weight);
-            const intMD = calcIntermittentMD(crcl, weight);
+              <div className="pt-4 border-t border-slate-100">
+                <div className="flex justify-between items-center bg-blue-50 p-3 rounded-lg border border-blue-100">
+                  <span className="font-semibold text-blue-800">CrCl (ml/phút)</span>
+                  <span className="text-xl font-bold text-blue-700">{crcl > 0 ? crcl : '--'}</span>
+                </div>
+                <div className="flex justify-between items-center mt-2 text-sm text-slate-600 px-1">
+                  <span>BMI: <strong className={bmi > 30 ? 'text-orange-500' : ''}>{bmi > 0 ? bmi : '--'}</strong></span>
+                  {bmi > 30 && <span className="text-orange-500 text-xs font-semibold">Béo phì</span>}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="lg:col-span-2 space-y-4">
             
-            const contLD = calcContinuousLD(weight, crcl);
-            const contMDRate = calcContinuousMDRate(crcl, weight);
+            {/* Tabs */}
+            <div className="flex space-x-2 bg-slate-200 p-1 rounded-xl">
+              <button 
+                onClick={() => setActiveTab('empiric')}
+                className={`flex-1 flex items-center justify-center py-3 rounded-lg font-semibold transition-all duration-200 ${activeTab === 'empiric' ? 'bg-white text-blue-700 shadow' : 'text-slate-600 hover:text-slate-800 hover:bg-slate-300'}`}
+              >
+                <Syringe size={18} className="mr-2" /> Liều Kinh Nghiệm
+              </button>
+              <button 
+                onClick={() => setActiveTab('tdm')}
+                className={`flex-1 flex items-center justify-center py-3 rounded-lg font-semibold transition-all duration-200 ${activeTab === 'tdm' ? 'bg-white text-blue-700 shadow' : 'text-slate-600 hover:text-slate-800 hover:bg-slate-300'}`}
+              >
+                <Activity size={18} className="mr-2" /> TDM & AUC
+              </button>
+            </div>
 
-            return (
-                <div className="max-w-4xl mx-auto p-4 sm:p-6">
-                    <div className="text-center mb-6">
-                        <h1 className="text-3xl font-bold text-blue-900">Vancomycin Calculator</h1>
-                        <p className="text-gray-600 mt-2">Dựa trên Quy trình Hướng dẫn Bệnh viện Quân Y 175</p>
+            {/* TAB: EMPIRIC DOSING */}
+            {activeTab === 'empiric' && (
+              <div className="space-y-6">
+                {/* Intermittent Infusion */}
+                <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+                  <h3 className="text-xl font-bold text-slate-800 mb-4 flex items-center">Truyền Ngắt Quãng (II)</h3>
+                  
+                  <div className="grid md:grid-cols-2 gap-4">
+                    <div className="bg-emerald-50 rounded-xl p-4 border border-emerald-100">
+                      <div className="text-emerald-800 font-bold mb-2">Liều Nạp (Loading Dose)</div>
+                      <div className="text-3xl font-extrabold text-emerald-600">{weight ? iiLoad.dose : '---'}</div>
+                      <div className="text-sm mt-2 text-emerald-700 space-y-1">
+                        <p>• Pha trong: <strong>{weight ? iiLoad.vol : '-'}</strong> NaCl 0.9% / G5%</p>
+                        <p>• Thời gian truyền: <strong>{weight ? iiLoad.time : '-'}</strong></p>
+                      </div>
                     </div>
 
-                    <div className="card bg-blue-600 text-white flex flex-col md:flex-row gap-6">
-                        <div className="flex-1">
-                            <label className="block text-sm font-semibold mb-1">Cân nặng thực tế (kg)</label>
-                            <input 
-                                type="number" 
-                                className="input-field text-black text-lg font-bold" 
-                                value={weight} 
-                                onChange={(e) => setWeight(e.target.value)} 
-                                min="30"
-                            />
-                        </div>
-                        <div className="flex-1">
-                            <label className="block text-sm font-semibold mb-1">Độ thanh thải Creatinin - CrCl (mL/phút)</label>
-                            <input 
-                                type="number" 
-                                className="input-field text-black text-lg font-bold" 
-                                value={crcl} 
-                                onChange={(e) => setCrcl(e.target.value)} 
-                                min="0"
-                            />
-                        </div>
+                    <div className="bg-blue-50 rounded-xl p-4 border border-blue-100 flex flex-col justify-between">
+                      <div>
+                        <div className="text-blue-800 font-bold mb-2">Liều Duy Trì (Maintenance)</div>
+                        <div className="text-sm text-blue-900 mb-2 font-medium">Cách liều nạp 8-12h. Tổng liều max 4g/ngày.</div>
+                      </div>
+                      <div className="text-sm space-y-2">
+                        {crrt ? (
+                           <div className="p-2 bg-white rounded border border-blue-200"><strong>CRRT:</strong> 10-15 mg/kg mỗi 24h</div>
+                        ) : (
+                          <>
+                            <div className={`p-2 bg-white rounded border ${crcl >= 90 ? 'border-blue-500 shadow-sm opacity-100' : 'border-blue-100 opacity-50'}`}><strong>CrCl &ge; 90:</strong> 15 mg/kg mỗi 8-12h</div>
+                            <div className={`p-2 bg-white rounded border ${(crcl >= 51 && crcl < 90) ? 'border-blue-500 shadow-sm opacity-100' : 'border-blue-100 opacity-50'}`}><strong>CrCl 51-89:</strong> 10-20 mg/kg mỗi 12h</div>
+                            <div className={`p-2 bg-white rounded border ${(crcl >= 30 && crcl <= 50) ? 'border-blue-500 shadow-sm opacity-100' : 'border-blue-100 opacity-50'}`}><strong>CrCl 30-50:</strong> 10-15 mg/kg q12h đến 20 mg/kg q24h</div>
+                            <div className={`p-2 bg-white rounded border ${(crcl >= 10 && crcl < 30) ? 'border-blue-500 shadow-sm opacity-100' : 'border-blue-100 opacity-50'}`}><strong>CrCl 10-29:</strong> 10-15 mg/kg q24h đến 15 mg/kg q48h</div>
+                            <div className={`p-2 bg-white rounded border ${(crcl > 0 && crcl < 10) ? 'border-blue-500 shadow-sm opacity-100' : 'border-blue-100 opacity-50'}`}><strong>CrCl &lt; 10:</strong> 500-750 mg mỗi 48h</div>
+                          </>
+                        )}
+                      </div>
                     </div>
-
-                    <div className="flex border-b border-gray-300 mb-6">
-                        <button 
-                            className={`px-4 py-2 font-semibold transition-colors ${tab === 'intermittent' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-500 hover:text-gray-700'}`}
-                            onClick={() => setTab('intermittent')}
-                        >
-                            Truyền ngắt quãng (II)
-                        </button>
-                        <button 
-                            className={`px-4 py-2 font-semibold transition-colors ${tab === 'continuous' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-500 hover:text-gray-700'}`}
-                            onClick={() => setTab('continuous')}
-                        >
-                            Truyền liên tục (CI)
-                        </button>
-                    </div>
-
-                    {}
-                    {tab === 'intermittent' && (
-                        <div className="space-y-6">
-                            <div className="card">
-                                <h2 className="text-xl font-bold border-b pb-2 mb-4">1. Liều nạp (Loading Dose)</h2>
-                                {intLD ? (
-                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
-                                        <div className="bg-gray-50 p-3 rounded"><p className="text-sm text-gray-500">Liều tính toán (~25mg/kg)</p><p className="font-bold text-lg">{intLD.dose} mg</p></div>
-                                        <div className="bg-blue-50 p-3 rounded"><p className="text-sm text-gray-500">Liều điều chỉnh (*)</p><p className="font-bold text-lg text-blue-700">{intLD.adj} mg</p></div>
-                                        <div className="bg-gray-50 p-3 rounded"><p className="text-sm text-gray-500">Dung môi NaCl 0.9%</p><p className="font-bold text-lg">{intLD.vol} mL</p></div>
-                                        <div className="bg-gray-50 p-3 rounded"><p className="text-sm text-gray-500">Thời gian truyền</p><p className="font-bold text-lg">{intLD.time}</p></div>
-                                    </div>
-                                ) : <p className="text-red-500">Vui lòng nhập cân nặng hợp lệ (≥ 36kg).</p>}
-                                <p className="text-xs text-gray-500 mt-3">* Liều điều chỉnh áp dụng cho BMI &gt; 30, CrCl &lt; 30, suy thận cấp, lọc máu chu kỳ.</p>
-                            </div>
-
-                            <div className="card">
-                                <h2 className="text-xl font-bold border-b pb-2 mb-4">2. Liều duy trì (Maintenance Dose)</h2>
-                                {intMD?.warning ? (
-                                    <div className="bg-red-100 text-red-700 p-4 rounded-lg font-bold">⚠️ {intMD.warning}</div>
-                                ) : (
-                                    intMD && (
-                                        <div>
-                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                                <div className="border p-4 rounded-lg bg-green-50">
-                                                    <p className="text-sm text-gray-600">Khuyến cáo liều & khoảng cách:</p>
-                                                    <p className="text-2xl font-bold text-green-800">{intMD.dose}</p>
-                                                    <p className="font-semibold text-green-700 mt-1">Khoảng cách: {intMD.interval}</p>
-                                                </div>
-                                                <div className="border p-4 rounded-lg">
-                                                    <p className="text-sm text-gray-600">Tổng liều tối đa/ngày:</p>
-                                                    <p className="font-bold text-lg">{intMD.max}</p>
-                                                    <p className="text-sm text-gray-600 mt-2">Khuyến cáo lấy TDM:</p>
-                                                    <p className="font-semibold">{intMD.tdm}</p>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    )
-                                )}
-                            </div>
-                            
-                            <div className="card">
-                                <h2 className="text-xl font-bold border-b pb-2 mb-4">3. TDM & Hiệu chỉnh</h2>
-                                <IntermittentTDM />
-                            </div>
-                        </div>
-                    )}
-
-                    {}
-                    {tab === 'continuous' && (
-                        <div className="space-y-6">
-                            <div className="card">
-                                <h2 className="text-xl font-bold border-b pb-2 mb-4">1. Liều nạp ban đầu (Loading Dose)</h2>
-                                {contLD ? (
-                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-center">
-                                        <div className="bg-blue-50 p-3 rounded"><p className="text-sm text-gray-500">Liều nạp (15-20mg/kg)</p><p className="font-bold text-xl text-blue-700">{contLD.dose} mg</p></div>
-                                        <div className="bg-gray-50 p-3 rounded"><p className="text-sm text-gray-500">Dung môi NaCl 0.9%</p><p className="font-bold text-lg">{contLD.vol} mL</p></div>
-                                        <div className="bg-gray-50 p-3 rounded"><p className="text-sm text-gray-500">Thời gian truyền</p><p className="font-bold text-lg">{contLD.time}</p></div>
-                                    </div>
-                                ) : <p className="text-red-500">Vui lòng nhập cân nặng hợp lệ.</p>}
-                            </div>
-
-                            <div className="card">
-                                <h2 className="text-xl font-bold border-b pb-2 mb-4">2. Liều duy trì (Maintenance Dose)</h2>
-                                <p className="mb-4 text-gray-700">Dùng ngay sau khi kết thúc liều nạp. Pha dung dịch nồng độ <strong>4 mg/mL</strong> (Vd: pha 1g trong 250mL, 2g trong 500mL).</p>
-                                {contMDRate ? (
-                                    <div className="bg-green-50 border border-green-200 p-6 rounded-lg text-center">
-                                        <p className="text-gray-600 mb-2">Tốc độ truyền duy trì (Bơm tiêm điện/Máy truyền dịch):</p>
-                                        <p className="text-4xl font-black text-green-700">{contMDRate} <span className="text-xl">mL/giờ</span></p>
-                                    </div>
-                                ) : <p className="text-red-500">Không thể tính toán. Kiểm tra lại Cân nặng và CrCl.</p>}
-                            </div>
-
-                            <div className="card">
-                                <h2 className="text-xl font-bold border-b pb-2 mb-4">3. TDM & Hiệu chỉnh</h2>
-                                <ContinuousTDM weight={weight} />
-                            </div>
-                        </div>
-                    )}
-                    
-                    <div className="mt-8 text-center text-xs text-gray-400 pb-8">
-                        <p>⚠️ <strong>Miễn trừ trách nhiệm y tế:</strong> Ứng dụng này chỉ mang tính chất tham khảo mô phỏng theo "QUY ĐỊNH SỬ DỤNG VANCOMYCIN TẠI BỆNH VIỆN QUÂN Y 175 (Phiên bản 01)". Quyết định điều trị cuối cùng phải do bác sĩ lâm sàng đưa ra dựa trên tình trạng cụ thể của từng bệnh nhân.</p>
-                    </div>
+                  </div>
                 </div>
-            );
-        };
 
-        const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(<App />);
-    </script>
-</body>
-</html>
+                {/* Continuous Infusion */}
+                <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+                  <h3 className="text-xl font-bold text-slate-800 mb-4 flex items-center">Truyền Liên Tục (CI)</h3>
+                  
+                  <div className="grid md:grid-cols-2 gap-4">
+                    <div className="bg-amber-50 rounded-xl p-4 border border-amber-100">
+                      <div className="text-amber-800 font-bold mb-2">Liều Nạp (Loading Dose)</div>
+                      <div className="text-3xl font-extrabold text-amber-600">{weight ? ciLoad.dose : '---'}</div>
+                      <div className="text-sm mt-2 text-amber-700 space-y-1">
+                        <p>• Pha trong: <strong>{weight ? ciLoad.vol : '-'}</strong></p>
+                        <p>• Thời gian truyền: <strong>{weight ? ciLoad.time : '-'}</strong></p>
+                      </div>
+                    </div>
+
+                    <div className="bg-indigo-50 rounded-xl p-4 border border-indigo-100">
+                      <div className="text-indigo-800 font-bold mb-2">Duy Trì (Bắt đầu ngay sau liều nạp)</div>
+                      <div className="flex flex-col h-full justify-center">
+                        <div className="text-sm text-indigo-900 mb-1">Tốc độ truyền (Nồng độ 4mg/mL):</div>
+                        <div className="text-4xl font-extrabold text-indigo-600">{crcl > 0 ? `${ciMaintRate} mL/h` : '---'}</div>
+                        <div className="text-sm text-indigo-700 mt-2 bg-white p-2 rounded border border-indigo-200">
+                          Tương đương: <strong>{crcl > 0 ? `${ciMaintDose24} mg/24h` : '-'}</strong>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="mt-4 flex p-3 bg-blue-50 text-blue-800 text-sm rounded-lg">
+                    <Info size={16} className="mr-2 flex-shrink-0 mt-0.5" />
+                    <p>Cách pha duy trì CI: Pha 1g trong 250mL hoặc 2g trong 500mL (tạo nồng độ 4mg/mL) truyền nhỏ giọt 24h.</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {activeTab === 'tdm' && (
+              <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+                <div className="flex items-center justify-between mb-6">
+                  <h3 className="text-xl font-bold text-slate-800">Tính AUC (Sawchuk-Zaske Method)</h3>
+                  <div className="bg-slate-100 px-3 py-1 rounded-full text-xs font-semibold text-slate-600">2-Level TDM</div>
+                </div>
+
+                <div className="grid md:grid-cols-2 gap-8">
+                  {/* Inputs */}
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-500 uppercase">Liều đang dùng (mg)</label>
+                        <input type="number" value={szDose} onChange={(e)=>setSzDose(e.target.value)} placeholder="Vd: 1000" className="w-full mt-1 p-2 border rounded bg-slate-50 focus:ring-2 focus:ring-purple-500 outline-none" />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-500 uppercase">Khoảng cách liều (h)</label>
+                        <input type="number" value={szTau} onChange={(e)=>setSzTau(e.target.value)} className="w-full mt-1 p-2 border rounded bg-slate-50 focus:ring-2 focus:ring-purple-500 outline-none" />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-500 uppercase">Thời gian truyền (h)</label>
+                      <input type="number" step="0.5" value={szTInf} onChange={(e)=>setSzTInf(e.target.value)} className="w-full mt-1 p-2 border rounded bg-slate-50 focus:ring-2 focus:ring-purple-500 outline-none" />
+                    </div>
+
+                    <div className="p-4 bg-purple-50 border border-purple-100 rounded-xl space-y-4">
+                      <div className="flex space-x-4">
+                        <div className="flex-1">
+                          <label className="block text-xs font-bold text-purple-800 uppercase">Nồng độ Đỉnh (Peak)</label>
+                          <input type="number" step="0.1" value={szCPeak} onChange={(e)=>setSzCPeak(e.target.value)} placeholder="mg/L" className="w-full mt-1 p-2 border border-purple-200 rounded focus:ring-2 focus:ring-purple-500 outline-none" />
+                        </div>
+                        <div className="flex-1">
+                          <label className="block text-xs font-semibold text-purple-700">T/g lấy máu sau truyền (h)</label>
+                          <input type="number" step="0.5" value={szT1} onChange={(e)=>setSzT1(e.target.value)} className="w-full mt-1 p-2 border border-purple-200 rounded focus:ring-2 focus:ring-purple-500 outline-none" />
+                        </div>
+                      </div>
+                      
+                      <div className="flex space-x-4">
+                        <div className="flex-1">
+                          <label className="block text-xs font-bold text-purple-800 uppercase">Nồng độ Đáy (Trough)</label>
+                          <input type="number" step="0.1" value={szCTrough} onChange={(e)=>setSzCTrough(e.target.value)} placeholder="mg/L" className="w-full mt-1 p-2 border border-purple-200 rounded focus:ring-2 focus:ring-purple-500 outline-none" />
+                        </div>
+                        <div className="flex-1">
+                          <label className="block text-xs font-semibold text-purple-700">T/g lấy máu trước liều (h)</label>
+                          <input type="number" step="0.5" value={szT2} onChange={(e)=>setSzT2(e.target.value)} className="w-full mt-1 p-2 border border-purple-200 rounded focus:ring-2 focus:ring-purple-500 outline-none" />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Outputs */}
+                  <div className="bg-slate-800 rounded-xl p-5 text-white shadow-inner flex flex-col">
+                    <h4 className="text-slate-300 font-semibold mb-4 border-b border-slate-700 pb-2">Kết quả Dược động học</h4>
+                    
+                    {!szResult ? (
+                      <div className="flex-1 flex items-center justify-center text-slate-500 text-sm text-center">
+                        Nhập đủ thông số Liều, Thời gian và 2 nồng độ (Peak/Trough) để tính toán.
+                      </div>
+                    ) : szResult.error ? (
+                      <div className="flex-1 flex items-center justify-center text-red-400 text-sm flex-col">
+                         <AlertCircle className="mb-2" />
+                         {szResult.error}
+                      </div>
+                    ) : (
+                      <div className="space-y-4 flex-1">
+                        <div className="grid grid-cols-2 gap-4 text-sm">
+                          <div>
+                            <span className="text-slate-400 block">K_e (h⁻¹)</span>
+                            <strong className="text-lg">{szResult.ke}</strong>
+                          </div>
+                          <div>
+                            <span className="text-slate-400 block">T_1/2 (h)</span>
+                            <strong className="text-lg">{szResult.halfLife}</strong>
+                          </div>
+                          <div>
+                            <span className="text-slate-400 block">V_d (L)</span>
+                            <strong className="text-lg">{szResult.vd}</strong>
+                          </div>
+                          <div>
+                            <span className="text-slate-400 block">Clearance (L/h)</span>
+                            <strong className="text-lg">{szResult.cl}</strong>
+                          </div>
+                          <div>
+                            <span className="text-slate-400 block">True Peak</span>
+                            <strong className="text-lg text-purple-300">{szResult.truePeak}</strong>
+                          </div>
+                          <div>
+                            <span className="text-slate-400 block">True Trough</span>
+                            <strong className="text-lg text-purple-300">{szResult.trueTrough}</strong>
+                          </div>
+                        </div>
+
+                        <div className="mt-4 p-4 bg-emerald-900/50 rounded-lg border border-emerald-700/50">
+                          <div className="text-emerald-400 text-sm mb-1 uppercase font-bold tracking-wider">AUC 24h Ước tính</div>
+                          <div className="text-4xl font-extrabold text-white">{szResult.auc24}</div>
+                          <div className="text-xs text-emerald-300 mt-1">Mục tiêu protocol: 400 - 600 (Max 800)</div>
+                        </div>
+                        
+                        {/* Gợi ý hiệu chỉnh liều tuyến tính */}
+                        <div className="pt-4 mt-4 border-t border-slate-700">
+                           <div className="flex justify-between items-center mb-2">
+                             <span className="text-sm font-semibold text-slate-300">Gợi ý chỉnh liều tuyến tính</span>
+                             <select value={targetAUC} onChange={(e)=>setTargetAUC(e.target.value)} className="bg-slate-700 text-white text-xs p-1 rounded border border-slate-600 outline-none focus:ring-1 focus:ring-blue-500">
+                               <option value="400">Target AUC 400</option>
+                               <option value="500">Target AUC 500</option>
+                               <option value="600">Target AUC 600</option>
+                             </select>
+                           </div>
+                           <div className="bg-slate-900 p-3 rounded text-sm text-yellow-300 flex items-center">
+                              <Syringe size={16} className="mr-2 flex-shrink-0" />
+                              <span>Liều mới / 24h = <strong className="text-lg ml-1">{Math.round(szDose * (24/szTau) * (Number(targetAUC) / szResult.auc24))} mg</strong></span>
+                           </div>
+                           <p className="text-[10px] text-slate-500 mt-2 italic">*Công thức: Liều mới = Liều hiện tại x (AUC mục tiêu / AUC tính toán). Luôn đánh giá lại lâm sàng.</p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
