@@ -163,13 +163,23 @@
             const deltaT = tau - tInf - t1 - t2; 
             if (deltaT <= 0 || cPeak <= cTrough) return { error: "Dữ liệu thời gian/nồng độ không hợp lệ" };
 
+            // k = ln(C1 / C2) / delta T
             const ke = Math.log(cPeak / cTrough) / deltaT;
+            
+            // Cmax (nồng độ đỉnh thực) và Cmin (nồng độ đáy thực) 
             const truePeak = cPeak * Math.exp(ke * t1);
             const trueTrough = cTrough * Math.exp(-ke * t2);
+            
+            // 1. Tính AUC cho một khoảng cách liều (AUC tau)
+            // AUC = [t * (Cmax + Cmin)] / 2 + (Cmax - Cmin) / k
+            const aucTau = (tInf * (truePeak + trueTrough)) / 2 + (truePeak - trueTrough) / ke;
+
+            // 2. Nhân với tần suất dùng thuốc trong ngày (24 / tau) để có tổng AUC(0-24)
+            const auc24 = aucTau * (24 / tau);
+
+            // Giữ lại tính Vd và Cl để hiển thị tham khảo trên giao diện
             const vd = (dose * (1 - Math.exp(-ke * tInf))) / (tInf * ke * (truePeak - trueTrough * Math.exp(-ke * tInf)));
             const cl = ke * vd;
-            const dailyDose = dose * (24 / tau);
-            const auc24 = dailyDose / cl;
 
             return {
                 ke: ke.toFixed(4),
@@ -178,7 +188,7 @@
                 trueTrough: trueTrough.toFixed(1),
                 vd: vd.toFixed(1),
                 cl: cl.toFixed(2),
-                auc24: auc24.toFixed(0)
+                auc24: Math.round(auc24) // Làm tròn số AUC
             };
         };
 
